@@ -5,7 +5,8 @@ use std::os::unix::process::ExitStatusExt;
 
 #[derive(Debug)]
 enum RunStatus {
-    Completed,
+    Succeeded,
+    Failed,
     TimedOut,
     FailedToStart,
     Signaled,
@@ -21,6 +22,10 @@ struct RunResult {
     duration: f64,
     stdout: String,
     stderr: String,
+}
+
+struct RunConfig {
+    timeout_secs: u64,
 }
 
 fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
@@ -58,8 +63,10 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
 
                 let run_status = if status.signal().is_some() {
                     RunStatus::Signaled
+                } else if status.success() {
+                    RunStatus::Succeeded
                 } else {
-                    RunStatus::Completed
+                    RunStatus::Failed
                 };
 
                 return RunResult {
@@ -117,7 +124,8 @@ fn print_result(result: &RunResult) {
     println!("args: {:?}", result.args);
 
     match result.status {
-        RunStatus::Completed => println!("status: completed"),
+        RunStatus::Succeeded => println!("status: succeeded"),
+        RunStatus::Failed => println!("status: failed"),
         RunStatus::TimedOut => println!("status: timed out"),
         RunStatus::FailedToStart => println!("status: failed to start"),
         RunStatus::Signaled => println!("status: terminated by signal"),
@@ -151,6 +159,42 @@ fn print_result(result: &RunResult) {
 }
 
 fn main() {
-    let result = run_command("python3", &["test_scripts/hello.py"], 3);
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() < 2 {
+        eprintln!("Usage: scry [--timeout SECONDS] <command> [arguments...]");
+        return;
+    }
+
+    let mut timeout_secs = 3;
+    let command_index;
+
+    if args[1] == "--timeout" {
+        if args.len() < 4 {
+            eprintln!("Usage: scry --timeout SECONDS <command> [arguments...]");
+            return;
+        }
+
+        timeout_secs = args[2].parse().unwrap();
+        command_index = 3;
+    } else {
+        command_index = 1;
+    }
+
+    let command = &args[command_index];
+
+    let command_args: Vec<&str> = args[command_index + 1..]
+        .iter()
+        .map(|arg| arg.as_str())
+        .collect();
+
+    let config = RunConfig { timeout_secs };
+
+    let result = run_command(
+        command,
+        &command_args,
+        config.timeout_secs,
+    );
+
     print_result(&result);
 }
