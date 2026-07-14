@@ -23,13 +23,51 @@ struct RunResult {
     duration: f64,
     stdout: String,
     stderr: String,
+    stdout_truncated: bool,
+    stderr_truncated: bool,
 }
 
 struct RunConfig {
     timeout_secs: u64,
+    max_output_bytes: usize,
 }
 
-fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
+fn read_with_limit<R: Read>(
+    mut reader: R,
+    max_bytes: usize,
+) -> (Vec<u8>, bool) {
+    let mut captured = Vec::new();
+    let mut chunk = [0u8; 8192];
+    let mut truncated = false;
+
+    loop {
+        let bytes_read = reader
+            .read(&mut chunk)
+            .expect("Could not read child output");
+
+        if bytes_read == 0 {
+            break;
+        }
+
+        let remaining = max_bytes.saturating_sub(captured.len());
+        let bytes_to_store = remaining.min(bytes_read);
+
+        captured.extend_from_slice(&chunk[..bytes_to_store]);
+
+        if bytes_to_store < bytes_read {
+            truncated = true;
+        }
+    }
+
+    (captured, truncated)
+}
+
+fn run_command(
+    command: &str,
+    args: &[&str],
+    timeout_secs: u64,
+    max_output_bytes: usize,
+) -> RunResult {
     let start = Instant::now();
 
     let mut child = match Command::new(command)
@@ -49,38 +87,28 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                 duration: start.elapsed().as_secs_f64(),
                 stdout: String::new(),
                 stderr: format!("Failed to start process: {err}"),
+                stdout_truncated: false,
+                stderr_truncated: false,
             };
         }
     };
 
-    let mut stdout = child
+    let stdout = child
         .stdout
         .take()
         .expect("stdout should be piped");
 
-    let mut stderr = child
+    let stderr = child
         .stderr
         .take()
         .expect("stderr should be piped");
 
     let stdout_thread = thread::spawn(move || {
-        let mut buffer = Vec::new();
-
-        stdout
-            .read_to_end(&mut buffer)
-            .expect("Could not read stdout");
-
-        buffer
+        read_with_limit(stdout, max_output_bytes)
     });
 
     let stderr_thread = thread::spawn(move || {
-        let mut buffer = Vec::new();
-
-        stderr
-            .read_to_end(&mut buffer)
-            .expect("Could not read stderr");
-
-        buffer
+        read_with_limit(stderr, max_output_bytes)
     });
 
     let timeout = Duration::from_secs(timeout_secs);
@@ -88,11 +116,11 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let stdout_bytes = stdout_thread
+                let (stdout_bytes, stdout_truncated) = stdout_thread
                     .join()
                     .expect("stdout reader thread panicked");
 
-                let stderr_bytes = stderr_thread
+                let (stderr_bytes, stderr_truncated) = stderr_thread
                     .join()
                     .expect("stderr reader thread panicked");
 
@@ -113,6 +141,8 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                     duration: start.elapsed().as_secs_f64(),
                     stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
                     stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
+                    stdout_truncated,
+                    stderr_truncated,
                 };
             }
 
@@ -124,11 +154,11 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                         .wait()
                         .expect("Timed out process could not be reaped");
 
-                    let stdout_bytes = stdout_thread
+                    let (stdout_bytes, stdout_truncated) = stdout_thread
                         .join()
                         .expect("stdout reader thread panicked");
 
-                    let stderr_bytes = stderr_thread
+                    let (stderr_bytes, stderr_truncated) = stderr_thread
                         .join()
                         .expect("stderr reader thread panicked");
 
@@ -141,6 +171,8 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                         duration: start.elapsed().as_secs_f64(),
                         stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
                         stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
+                        stdout_truncated,
+                        stderr_truncated,
                     };
                 }
 
@@ -157,6 +189,8 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                     duration: start.elapsed().as_secs_f64(),
                     stdout: String::new(),
                     stderr: format!("Error while waiting on process: {err}"),
+                    stdout_truncated: false,
+                    stderr_truncated: false,
                 };
             }
         }
@@ -195,11 +229,19 @@ fn print_result(result: &RunResult) {
         println!("{}", result.stdout);
     }
 
+    if result.stdout_truncated {
+        println!("[stdout truncated]");
+    }
+
     println!("--- stderr ---");
     if result.stderr.is_empty() {
         println!("(empty)");
     } else {
         println!("{}", result.stderr);
+    }
+
+    if result.stderr_truncated {
+        println!("[stderr truncated]");
     }
 }
 
@@ -256,12 +298,16 @@ fn main() {
         .map(|arg| arg.as_str())
         .collect();
 
-    let config = RunConfig { timeout_secs };
+    let config = RunConfig {
+        timeout_secs,
+        max_output_bytes: 1_000_000,
+    };
 
     let result = run_command(
         command,
         &command_args,
         config.timeout_secs,
+        config.max_output_bytes,
     );
 
     print_result(&result);

@@ -1,2 +1,2 @@
-for i in range(1_000_000):
+for i in range(10_000_000):
     print(f"output line {i}")
