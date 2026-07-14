@@ -1,7 +1,8 @@
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
-use std::thread;
+use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 enum RunStatus {
@@ -52,14 +53,48 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
         }
     };
 
+    let mut stdout = child
+        .stdout
+        .take()
+        .expect("stdout should be piped");
+
+    let mut stderr = child
+        .stderr
+        .take()
+        .expect("stderr should be piped");
+
+    let stdout_thread = thread::spawn(move || {
+        let mut buffer = Vec::new();
+
+        stdout
+            .read_to_end(&mut buffer)
+            .expect("Could not read stdout");
+
+        buffer
+    });
+
+    let stderr_thread = thread::spawn(move || {
+        let mut buffer = Vec::new();
+
+        stderr
+            .read_to_end(&mut buffer)
+            .expect("Could not read stderr");
+
+        buffer
+    });
+
     let timeout = Duration::from_secs(timeout_secs);
 
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let output = child
-                    .wait_with_output()
-                    .expect("Process ended, but output could not be collected");
+                let stdout_bytes = stdout_thread
+                    .join()
+                    .expect("stdout reader thread panicked");
+
+                let stderr_bytes = stderr_thread
+                    .join()
+                    .expect("stderr reader thread panicked");
 
                 let run_status = if status.signal().is_some() {
                     RunStatus::Signaled
@@ -76,17 +111,26 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                     exit_code: status.code(),
                     signal: status.signal(),
                     duration: start.elapsed().as_secs_f64(),
-                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                    stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
+                    stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
                 };
             }
+
             Ok(None) => {
                 if start.elapsed() >= timeout {
                     let _ = child.kill();
 
-                    let output = child
-                        .wait_with_output()
-                        .expect("Timed out process, but output could not be collected");
+                    child
+                        .wait()
+                        .expect("Timed out process could not be reaped");
+
+                    let stdout_bytes = stdout_thread
+                        .join()
+                        .expect("stdout reader thread panicked");
+
+                    let stderr_bytes = stderr_thread
+                        .join()
+                        .expect("stderr reader thread panicked");
 
                     return RunResult {
                         command: command.to_string(),
@@ -95,13 +139,14 @@ fn run_command(command: &str, args: &[&str], timeout_secs: u64) -> RunResult {
                         exit_code: None,
                         signal: None,
                         duration: start.elapsed().as_secs_f64(),
-                        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                        stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
+                        stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
                     };
                 }
 
                 thread::sleep(Duration::from_millis(10));
             }
+
             Err(err) => {
                 return RunResult {
                     command: command.to_string(),
@@ -158,11 +203,16 @@ fn print_result(result: &RunResult) {
     }
 }
 
+fn print_usage() {
+    eprintln!("Usage: scry [--timeout SECONDS] <command> [arguments...]");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: scry [--timeout SECONDS] <command> [arguments...]");
+        eprintln!("Error: missing command.");
+        print_usage();
         return;
     }
 
@@ -170,12 +220,30 @@ fn main() {
     let command_index;
 
     if args[1] == "--timeout" {
-        if args.len() < 4 {
-            eprintln!("Usage: scry --timeout SECONDS <command> [arguments...]");
+        if args.len() < 3 {
+            eprintln!("Error: --timeout requires a number.");
+            print_usage();
             return;
         }
 
-        timeout_secs = args[2].parse().unwrap();
+        timeout_secs = match args[2].parse::<u64>() {
+            Ok(value) => value,
+            Err(_) => {
+                eprintln!(
+                    "Error: timeout must be a nonnegative integer, not {:?}.",
+                    args[2]
+                );
+                print_usage();
+                return;
+            }
+        };
+
+        if args.len() < 4 {
+            eprintln!("Error: missing command after timeout value.");
+            print_usage();
+            return;
+        }
+
         command_index = 3;
     } else {
         command_index = 1;
