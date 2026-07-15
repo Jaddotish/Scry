@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::os::unix::process::ExitStatusExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -48,6 +48,7 @@ pub fn run_command(
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
     {
         Ok(child) => child,
@@ -122,7 +123,11 @@ pub fn run_command(
 
             Ok(None) => {
                 if start.elapsed() >= timeout {
-                    let _ = child.kill();
+                    let process_group_id = child.id() as i32;
+
+                    unsafe {
+                        libc::kill(-process_group_id, libc::SIGKILL);
+                    }
 
                     child
                         .wait()
