@@ -31,6 +31,16 @@ fn print_result(result: &RunResult) {
 
     println!("duration: {:.4} seconds", result.duration);
 
+    println!("--- files opened for writing ---");
+
+    if result.files_opened_for_writing.is_empty() {
+        println!("(none)");
+    } else {
+        for path in &result.files_opened_for_writing {
+            println!("{path}");
+        }
+    }
+
     println!("--- stdout ---");
     if result.stdout.is_empty() {
         println!("(empty)");
@@ -114,7 +124,7 @@ fn main() {
         memory_limit_bytes: 256_000_000,
         file_size_limit_bytes: 10_000_000,
         open_file_limit: 64,
-        process_limit: 32,
+        process_limit: 10_000,
     };
 
     let result = run_command(
@@ -147,7 +157,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -167,7 +177,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -187,7 +197,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -208,7 +218,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -229,7 +239,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -249,7 +259,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -272,7 +282,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -293,7 +303,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64,
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -311,7 +321,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64, 
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
@@ -332,7 +342,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64, 
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -355,10 +365,37 @@ mod tests {
             256_000_000,
             10_000_000,
             64,
-            32,
+            10_000
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
         assert!(result.stderr.contains("Too many open files"));
+    }
+
+    #[test]
+    fn records_files_opened_for_writing() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "open('trace_test_output.txt', 'w').write('hello')",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+            64,
+            10_000,
+        );
+
+        assert!(matches!(result.status, RunStatus::Succeeded));
+        assert!(
+            result
+                .files_opened_for_writing
+                .contains(&"trace_test_output.txt".to_string())
+        );
+
+        let _ = std::fs::remove_file("trace_test_output.txt");
     }
 }

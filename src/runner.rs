@@ -36,6 +36,20 @@ fn read_with_limit<R: Read>(
     (captured, truncated)
 }
 
+fn is_successful_write_open(line: &str) -> bool {
+    line.starts_with("openat(")
+        && (line.contains("O_WRONLY") || line.contains("O_RDWR"))
+        && !line.contains("= -1")
+}
+
+fn extract_quoted_path(line: &str) -> Option<&str> {
+    let first_quote = line.find('"')?;
+    let rest = &line[first_quote + 1..];
+    let second_quote = rest.find('"')?;
+
+    Some(&rest[..second_quote])
+}
+
 pub fn run_command(
     command: &str,
     args: &[&str],
@@ -49,9 +63,18 @@ pub fn run_command(
 ) -> RunResult {
     let start = Instant::now();
 
-    let mut cmd = Command::new(command);
+    let trace_file = tempfile::NamedTempFile::new()
+        .expect("Could not create trace file");
+    let trace_path = trace_file.path().to_path_buf();
 
-    cmd.args(args)
+    let mut cmd = Command::new("strace");
+
+    cmd.arg("-o")
+        .arg(&trace_path)
+        .arg("-e")
+        .arg("trace=openat,unlink,rename,mkdir,rmdir")
+        .arg(command)
+        .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
@@ -130,6 +153,7 @@ pub fn run_command(
                 stderr: format!("Failed to start process: {err}"),
                 stdout_truncated: false,
                 stderr_truncated: false,
+                files_opened_for_writing: Vec::new(),
             };
         }
     };
@@ -165,7 +189,28 @@ pub fn run_command(
                     .join()
                     .expect("stderr reader thread panicked");
 
-                let run_status = if status.signal().is_some() {
+                let stderr_text = 
+                    String::from_utf8_lossy(&stderr_bytes).to_string();
+
+                let command_failed_to_start =
+                    stderr_text.starts_with("strace: Cannot find executable");
+
+                let trace_contents = std::fs::read_to_string(&trace_path)
+                    .expect("Could not read trace file");
+
+                let mut files_opened_for_writing = Vec::new();
+
+                for line in trace_contents.lines() {
+                    if is_successful_write_open(line) {
+                        if let Some(path) = extract_quoted_path(line) {
+                            files_opened_for_writing.push(path.to_string());
+                        }
+                    }
+                }
+
+                let run_status = if command_failed_to_start {
+                    RunStatus::FailedToStart
+                } else if status.signal().is_some() {
                     RunStatus::Signaled
                 } else if status.success() {
                     RunStatus::Succeeded
@@ -177,13 +222,22 @@ pub fn run_command(
                     command: command.to_string(),
                     args: args.iter().map(|s| s.to_string()).collect(),
                     status: run_status,
-                    exit_code: status.code(),
+                    exit_code: if command_failed_to_start {
+                        None
+                    } else {
+                        status.code()
+                    },
                     signal: status.signal(),
                     duration: start.elapsed().as_secs_f64(),
                     stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
-                    stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
+                    stderr: if command_failed_to_start {
+                        format!("Failed to start process: {stderr_text}")
+                    } else {
+                        stderr_text
+                    },
                     stdout_truncated,
                     stderr_truncated,
+                    files_opened_for_writing,
                 };
             }
 
@@ -218,6 +272,7 @@ pub fn run_command(
                         stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
                         stdout_truncated,
                         stderr_truncated,
+                        files_opened_for_writing: Vec::new(),
                     };
                 }
 
@@ -236,6 +291,7 @@ pub fn run_command(
                     stderr: format!("Error while waiting on process: {err}"),
                     stdout_truncated: false,
                     stderr_truncated: false,
+                    files_opened_for_writing: Vec::new(),
                 };
             }
         }

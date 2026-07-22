@@ -19,4 +19,5 @@ pub struct RunResult {
     pub stderr: String,
     pub stdout_truncated: bool,
     pub stderr_truncated: bool,
+    pub files_opened_for_writing: Vec<String>,
 }
