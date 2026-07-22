@@ -113,6 +113,7 @@ fn main() {
         max_output_bytes: 1_000_000,
         memory_limit_bytes: 256_000_000,
         file_size_limit_bytes: 10_000_000,
+        open_file_limit: 64,
     };
 
     let result = run_command(
@@ -123,6 +124,7 @@ fn main() {
         config.max_output_bytes,
         config.memory_limit_bytes,
         config.file_size_limit_bytes,
+        config.open_file_limit,
     );
 
     print_result(&result);
@@ -142,6 +144,7 @@ mod tests {
             1_000_000,
             1_000_000_000,
             10_000_000,
+            64, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -160,6 +163,7 @@ mod tests {
             1_000_000,
             1_000_000_000,
             10_000_000,
+            64,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -178,6 +182,7 @@ mod tests {
             1_000_000,
             1_000_000_000,
             10_000_000,
+            64, 
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -197,6 +202,7 @@ mod tests {
             1_000_000,
             1_000_000_000,
             10_000_000,
+            64,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -216,6 +222,7 @@ mod tests {
             1_000_000,
             1_000_000_000,
             10_000_000,
+            64, 
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -234,6 +241,7 @@ mod tests {
             1_000,
             1_000_000_000,
             10_000_000,
+            64,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -255,6 +263,7 @@ mod tests {
             1_000,
             1_000_000_000,
             10_000_000,
+            64,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -274,6 +283,7 @@ mod tests {
             1_000_000,
             256_000_000,
             10_000_000,
+            64,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -290,6 +300,7 @@ mod tests {
             1_000_000,
             256_000_000,
             10_000_000,
+            64, 
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
@@ -309,11 +320,32 @@ mod tests {
             1_000_000,
             256_000_000,
             10_000_000,
+            64, 
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
         assert!(result.stderr.contains("File too large"));
 
         let _ = std::fs::remove_file("test_output.bin");
+    }
+
+    #[test]
+    fn open_file_limit_stops_excessive_file_opens() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "files = []\nwhile True:\n    files.append(open('/dev/null', 'r'))",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+            64,
+        );
+
+        assert!(matches!(result.status, RunStatus::Failed));
+        assert!(result.stderr.contains("Too many open files"));
     }
 }
