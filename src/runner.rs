@@ -40,6 +40,7 @@ pub fn run_command(
     command: &str,
     args: &[&str],
     timeout_secs: u64,
+    cpu_limit_secs: u64,
     max_output_bytes: usize,
     memory_limit_bytes: u64,
 ) -> RunResult {
@@ -54,18 +55,30 @@ pub fn run_command(
 
     unsafe {
         cmd.pre_exec(move || {
-            let limit = libc::rlimit {
+            let mem_limit = libc::rlimit {
                 rlim_cur: memory_limit_bytes,
                 rlim_max: memory_limit_bytes,
             };
 
-            let result = libc::setrlimit(libc::RLIMIT_AS, &limit);
+            let cpu_limit = libc::rlimit {
+                rlim_cur: cpu_limit_secs,
+                rlim_max: cpu_limit_secs,
+            };
 
-            if result == 0 {
-                Ok(())
-            } else {
-                Err(std::io::Error::last_os_error())
+
+            let mem_result = libc::setrlimit(libc::RLIMIT_AS, &mem_limit);
+            let cpu_result = libc::setrlimit(libc::RLIMIT_CPU, &cpu_limit);
+
+            
+            if mem_result != 0 {
+                return Err(std::io::Error::last_os_error());
             }
+
+            if cpu_result != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            Ok(())
         });
     }
 
