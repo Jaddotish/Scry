@@ -43,6 +43,7 @@ pub fn run_command(
     cpu_limit_secs: u64,
     max_output_bytes: usize,
     memory_limit_bytes: u64,
+    file_size_limit_bytes:u64,
 ) -> RunResult {
     let start = Instant::now();
 
@@ -65,9 +66,15 @@ pub fn run_command(
                 rlim_max: cpu_limit_secs,
             };
 
+            let file_size_limit = libc::rlimit {
+                rlim_cur: file_size_limit_bytes,
+                rlim_max: file_size_limit_bytes,
+            };
+
 
             let mem_result = libc::setrlimit(libc::RLIMIT_AS, &mem_limit);
             let cpu_result = libc::setrlimit(libc::RLIMIT_CPU, &cpu_limit);
+            let file_size_result = libc::setrlimit(libc::RLIMIT_FSIZE, &file_size_limit);
 
             
             if mem_result != 0 {
@@ -75,6 +82,10 @@ pub fn run_command(
             }
 
             if cpu_result != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            if file_size_result != 0 {
                 return Err(std::io::Error::last_os_error());
             }
 

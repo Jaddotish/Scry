@@ -112,6 +112,7 @@ fn main() {
         cpu_limit_secs: 2,
         max_output_bytes: 1_000_000,
         memory_limit_bytes: 256_000_000,
+        file_size_limit_bytes: 10_000_000,
     };
 
     let result = run_command(
@@ -121,6 +122,7 @@ fn main() {
         config.cpu_limit_secs,
         config.max_output_bytes,
         config.memory_limit_bytes,
+        config.file_size_limit_bytes,
     );
 
     print_result(&result);
@@ -139,6 +141,7 @@ mod tests {
             5,
             1_000_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -156,6 +159,7 @@ mod tests {
             5,
             1_000_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -173,6 +177,7 @@ mod tests {
             5,
             1_000_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -191,6 +196,7 @@ mod tests {
             5,
             1_000_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -209,6 +215,7 @@ mod tests {
             5,
             1_000_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -226,6 +233,7 @@ mod tests {
             5,
             1_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -246,6 +254,7 @@ mod tests {
             5,
             1_000,
             1_000_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -264,6 +273,7 @@ mod tests {
             5,
             1_000_000,
             256_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -279,9 +289,31 @@ mod tests {
             1,
             1_000_000,
             256_000_000,
+            10_000_000,
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
         assert_eq!(result.signal, Some(libc::SIGKILL));
+    }
+
+    #[test]
+    fn file_size_limit_stops_large_file_write() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "with open('test_output.bin', 'wb') as f:\n    while True:\n        f.write(b'x' * 1_000_000)",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+        );
+
+        assert!(matches!(result.status, RunStatus::Failed));
+        assert!(result.stderr.contains("File too large"));
+
+        let _ = std::fs::remove_file("test_output.bin");
     }
 }
