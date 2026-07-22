@@ -114,6 +114,7 @@ fn main() {
         memory_limit_bytes: 256_000_000,
         file_size_limit_bytes: 10_000_000,
         open_file_limit: 64,
+        process_limit: 32,
     };
 
     let result = run_command(
@@ -125,6 +126,7 @@ fn main() {
         config.memory_limit_bytes,
         config.file_size_limit_bytes,
         config.open_file_limit,
+        config.process_limit
     );
 
     print_result(&result);
@@ -145,6 +147,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -164,6 +167,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -183,6 +187,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -203,6 +208,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -223,6 +229,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -242,6 +249,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -264,6 +272,7 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -284,6 +293,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64,
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -301,6 +311,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64, 
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
@@ -321,6 +332,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64, 
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -343,6 +355,7 @@ mod tests {
             256_000_000,
             10_000_000,
             64,
+            32,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));

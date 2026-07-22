@@ -45,6 +45,7 @@ pub fn run_command(
     memory_limit_bytes: u64,
     file_size_limit_bytes: u64,
     open_file_limit: u64,
+    process_limit: u64,
 ) -> RunResult {
     let start = Instant::now();
 
@@ -57,31 +58,37 @@ pub fn run_command(
 
     unsafe {
         cmd.pre_exec(move || {
-            let mem_limit = libc::rlimit {
+            let mem_rlimit = libc::rlimit {
                 rlim_cur: memory_limit_bytes,
                 rlim_max: memory_limit_bytes,
             };
 
-            let cpu_limit = libc::rlimit {
+            let cpu_rlimit = libc::rlimit {
                 rlim_cur: cpu_limit_secs,
                 rlim_max: cpu_limit_secs,
             };
 
-            let file_size_limit = libc::rlimit {
+            let file_size_rlimit = libc::rlimit {
                 rlim_cur: file_size_limit_bytes,
                 rlim_max: file_size_limit_bytes,
             };
 
-            let open_file_limit = libc::rlimit {
+            let open_file_rlimit = libc::rlimit {
                 rlim_cur: open_file_limit,
                 rlim_max: open_file_limit,
             };
 
+            let process_rlimit = libc::rlimit {
+                rlim_cur: process_limit,
+                rlim_max: process_limit,
+            };
 
-            let mem_result = libc::setrlimit(libc::RLIMIT_AS, &mem_limit);
-            let cpu_result = libc::setrlimit(libc::RLIMIT_CPU, &cpu_limit);
-            let file_size_result = libc::setrlimit(libc::RLIMIT_FSIZE, &file_size_limit);
-            let open_file_result = libc::setrlimit(libc::RLIMIT_NOFILE, &open_file_limit);
+
+            let mem_result = libc::setrlimit(libc::RLIMIT_AS, &mem_rlimit);
+            let cpu_result = libc::setrlimit(libc::RLIMIT_CPU, &cpu_rlimit);
+            let file_size_result = libc::setrlimit(libc::RLIMIT_FSIZE, &file_size_rlimit);
+            let open_file_result = libc::setrlimit(libc::RLIMIT_NOFILE, &open_file_rlimit);
+            let process_result = libc::setrlimit(libc::RLIMIT_NPROC, &process_rlimit);
 
             
             if mem_result != 0 {
@@ -97,6 +104,10 @@ pub fn run_command(
             }
 
             if open_file_result != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            if process_result != 0 {
                 return Err(std::io::Error::last_os_error());
             }
 

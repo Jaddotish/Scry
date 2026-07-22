@@ -5,4 +5,5 @@ pub struct RunConfig {
     pub memory_limit_bytes: u64,
     pub file_size_limit_bytes: u64,
     pub open_file_limit: u64,
+    pub process_limit: u64,
 }
