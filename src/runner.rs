@@ -41,15 +41,35 @@ pub fn run_command(
     args: &[&str],
     timeout_secs: u64,
     max_output_bytes: usize,
+    memory_limit_bytes: u64,
 ) -> RunResult {
     let start = Instant::now();
 
-    let mut child = match Command::new(command)
-        .args(args)
+    let mut cmd = Command::new(command);
+
+    cmd.args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
+        .process_group(0);
+
+    unsafe {
+        cmd.pre_exec(move || {
+            let limit = libc::rlimit {
+                rlim_cur: memory_limit_bytes,
+                rlim_max: memory_limit_bytes,
+            };
+
+            let result = libc::setrlimit(libc::RLIMIT_AS, &limit);
+
+            if result == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error())
+            }
+        });
+    }
+
+    let mut child = match cmd.spawn()
     {
         Ok(child) => child,
         Err(err) => {
