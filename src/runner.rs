@@ -42,6 +42,44 @@ fn is_successful_write_open(line: &str) -> bool {
         && !line.contains("= -1")
 }
 
+fn is_successful_unlink(line: &str) -> bool {
+    line.starts_with("unlink(")
+        && !line.contains("= -1")
+}
+
+fn is_successful_mkdir(line: &str) -> bool {
+    line.starts_with("mkdir(")
+        && !line.contains("= -1")
+}
+
+fn is_successful_rmdir(line: &str) -> bool {
+    line.starts_with("rmdir(")
+        && !line.contains("= -1")
+}
+
+fn is_successful_rename(line: &str) -> bool {
+    line.starts_with("rename(")
+        && !line.contains("= -1")
+}
+
+fn extract_quoted_paths(line: &str) -> Vec<&str> {
+    let mut paths = Vec::new();
+    let mut remaining = line;
+
+    while let Some(first_quote) = remaining.find('"') {
+        remaining = &remaining[first_quote + 1..];
+
+        let Some(second_quote) = remaining.find('"') else {
+            break;
+        };
+
+        paths.push(&remaining[..second_quote]);
+        remaining = &remaining[second_quote + 1..];
+    }
+
+    paths
+}
+
 fn extract_quoted_path(line: &str) -> Option<&str> {
     let first_quote = line.find('"')?;
     let rest = &line[first_quote + 1..];
@@ -49,6 +87,7 @@ fn extract_quoted_path(line: &str) -> Option<&str> {
 
     Some(&rest[..second_quote])
 }
+
 
 pub fn run_command(
     command: &str,
@@ -154,6 +193,10 @@ pub fn run_command(
                 stdout_truncated: false,
                 stderr_truncated: false,
                 files_opened_for_writing: Vec::new(),
+                files_deleted: Vec::new(),
+                directories_created: Vec::new(),
+                directories_deleted: Vec::new(),
+                files_renamed: Vec::new(),
             };
         }
     };
@@ -199,11 +242,44 @@ pub fn run_command(
                     .expect("Could not read trace file");
 
                 let mut files_opened_for_writing = Vec::new();
+                let mut files_deleted = Vec::new();
+                let mut directories_created = Vec::new();
+                let mut directories_deleted = Vec::new();
+                let mut files_renamed = Vec::new();
 
                 for line in trace_contents.lines() {
                     if is_successful_write_open(line) {
                         if let Some(path) = extract_quoted_path(line) {
                             files_opened_for_writing.push(path.to_string());
+                        }
+                    }
+
+                    if is_successful_unlink(line) {
+                        if let Some(path) = extract_quoted_path(line) {
+                            files_deleted.push(path.to_string());
+                        }
+                    }
+
+                    if is_successful_mkdir(line) {
+                        if let Some(path) = extract_quoted_path(line) {
+                            directories_created.push(path.to_string());
+                        }
+                    }
+
+                    if is_successful_rmdir(line) {
+                        if let Some(path) = extract_quoted_path(line) {
+                            directories_deleted.push(path.to_string());
+                        }
+                    }
+
+                    if is_successful_rename(line) {
+                        let paths = extract_quoted_paths(line);
+
+                        if paths.len() == 2 {
+                            files_renamed.push((
+                                paths[0].to_string(),
+                                paths[1].to_string(),
+                            ));
                         }
                     }
                 }
@@ -238,6 +314,10 @@ pub fn run_command(
                     stdout_truncated,
                     stderr_truncated,
                     files_opened_for_writing,
+                    files_deleted,
+                    directories_created,
+                    directories_deleted,
+                    files_renamed,
                 };
             }
 
@@ -273,6 +353,10 @@ pub fn run_command(
                         stdout_truncated,
                         stderr_truncated,
                         files_opened_for_writing: Vec::new(),
+                        files_deleted: Vec::new(),
+                        directories_created: Vec::new(),
+                        directories_deleted: Vec::new(),
+                        files_renamed: Vec::new(),
                     };
                 }
 
@@ -292,6 +376,10 @@ pub fn run_command(
                     stdout_truncated: false,
                     stderr_truncated: false,
                     files_opened_for_writing: Vec::new(),
+                    files_deleted: Vec::new(),
+                    directories_created: Vec::new(),
+                    directories_deleted: Vec::new(),
+                    files_renamed: Vec::new(),
                 };
             }
         }

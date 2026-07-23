@@ -41,6 +41,48 @@ fn print_result(result: &RunResult) {
         }
     }
 
+    println!("--- files deleted ---");
+
+    if result.files_deleted.is_empty() {
+        println!("(none)");
+    } else {
+        for path in &result.files_deleted {
+            println!("{path}");
+        }
+    }
+
+    println!("--- directories created ---");
+
+    if result.directories_created.is_empty() {
+        println!("(none)");
+    } else {
+        for path in &result.directories_created {
+            println!("{path}");
+        }
+    }
+
+    println!("--- directories deleted ---");
+
+    if result.directories_deleted.is_empty() {
+        println!("(none)");
+    } else {
+        for path in &result.directories_deleted {
+            println!("{path}");
+        }
+    }
+
+    println!("--- files renamed ---");
+
+    if result.files_renamed.is_empty() {
+        println!("(none)");
+    } else {
+        for (from, to) in &result.files_renamed {
+            println!("{from} -> {to}");
+        }
+    }
+
+    println!();
+
     println!("--- stdout ---");
     if result.stdout.is_empty() {
         println!("(empty)");
@@ -397,5 +439,114 @@ mod tests {
         );
 
         let _ = std::fs::remove_file("trace_test_output.txt");
+    }
+
+    #[test]
+    fn records_deleted_files() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "open('trace_delete_test.txt', 'w').close(); import os; os.remove('trace_delete_test.txt')",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+            64,
+            10_000,
+        );
+
+        assert!(matches!(result.status, RunStatus::Succeeded));
+        assert!(
+            result
+                .files_deleted
+                .contains(&"trace_delete_test.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn records_created_directories() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "import os; os.mkdir('trace_test_directory'); os.rmdir('trace_test_directory')",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+            64,
+            10_000,
+        );
+
+        assert!(matches!(result.status, RunStatus::Succeeded));
+        assert!(
+            result
+                .directories_created
+                .contains(&"trace_test_directory".to_string())
+        );
+    }
+
+    #[test]
+    fn records_created_and_deleted_directories() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "import os; os.mkdir('trace_test_directory'); os.rmdir('trace_test_directory')",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+            64,
+            10_000,
+        );
+
+        assert!(matches!(result.status, RunStatus::Succeeded));
+
+        assert!(
+            result
+                .directories_created
+                .contains(&"trace_test_directory".to_string())
+        );
+
+        assert!(
+            result
+                .directories_deleted
+                .contains(&"trace_test_directory".to_string())
+        );
+    }
+
+    #[test]
+    fn records_renamed_files() {
+        let result = run_command(
+            "python3",
+            &[
+                "-c",
+                "open('old_trace_name.txt', 'w').close(); import os; os.rename('old_trace_name.txt', 'new_trace_name.txt'); os.remove('new_trace_name.txt')",
+            ],
+            5,
+            2,
+            1_000_000,
+            256_000_000,
+            10_000_000,
+            64,
+            10_000,
+        );
+
+        assert!(matches!(result.status, RunStatus::Succeeded));
+
+        assert!(
+            result.files_renamed.contains(&(
+                "old_trace_name.txt".to_string(),
+                "new_trace_name.txt".to_string(),
+            ))
+        );
     }
 }

@@ -20,4 +20,8 @@ pub struct RunResult {
     pub stdout_truncated: bool,
     pub stderr_truncated: bool,
     pub files_opened_for_writing: Vec<String>,
+    pub files_deleted: Vec<String>,
+    pub directories_created: Vec<String>,
+    pub directories_deleted: Vec<String>,
+    pub files_renamed: Vec<(String, String)>,
 }
