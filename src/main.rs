@@ -180,6 +180,7 @@ fn main() {
         file_size_limit_bytes: 10_000_000,
         open_file_limit: 64,
         process_limit: 10_000,
+        use_uts_namespace: true,
     };
 
     let result = run_command(
@@ -191,7 +192,8 @@ fn main() {
         config.memory_limit_bytes,
         config.file_size_limit_bytes,
         config.open_file_limit,
-        config.process_limit
+        config.process_limit,
+        config.use_uts_namespace,
     );
 
     if json_output {
@@ -216,7 +218,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -236,7 +239,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -256,7 +260,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -277,7 +282,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -298,7 +304,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64, 
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -318,7 +325,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -341,7 +349,8 @@ mod tests {
             1_000_000_000,
             10_000_000,
             64,
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -362,7 +371,8 @@ mod tests {
             256_000_000,
             10_000_000,
             64,
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -380,7 +390,8 @@ mod tests {
             256_000_000,
             10_000_000,
             64, 
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
@@ -401,7 +412,8 @@ mod tests {
             256_000_000,
             10_000_000,
             64, 
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -424,7 +436,8 @@ mod tests {
             256_000_000,
             10_000_000,
             64,
-            10_000
+            10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -446,6 +459,7 @@ mod tests {
             10_000_000,
             64,
             10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -473,6 +487,7 @@ mod tests {
             10_000_000,
             64,
             10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -498,6 +513,7 @@ mod tests {
             10_000_000,
             64,
             10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -523,6 +539,7 @@ mod tests {
             10_000_000,
             64,
             10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -555,6 +572,7 @@ mod tests {
             10_000_000,
             64,
             10_000,
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -579,6 +597,7 @@ mod tests {
             10_000_000,
             64,
             10_000,
+            true,
         );
 
         let json = serde_json::to_value(&result)
@@ -588,5 +607,40 @@ mod tests {
         assert_eq!(json["status"], "Succeeded");
         assert_eq!(json["exit_code"], 0);
         assert_eq!(json["stdout"], "hello\n");
+    }
+
+    #[test]
+    fn uts_namespace_changes_hostname_only_when_enabled() {
+        let with_namespace = run_command(
+            "python3",
+            &["-c", "import socket; print(socket.gethostname())"],
+            2,
+            5,
+            1_000_000,
+            1_000_000_000,
+            10_000_000,
+            64,
+            10_000,
+            true,
+        );
+
+        assert!(matches!(with_namespace.status, RunStatus::Succeeded));
+        assert_eq!(with_namespace.stdout.trim(), "scry-sandbox");
+
+        let without_namespace = run_command(
+            "python3",
+            &["-c", "import socket; print(socket.gethostname())"],
+            2,
+            5,
+            1_000_000,
+            1_000_000_000,
+            10_000_000,
+            64,
+            10_000,
+            false,
+        );
+
+        assert!(matches!(without_namespace.status, RunStatus::Succeeded));
+        assert_ne!(without_namespace.stdout.trim(), "scry-sandbox");
     }
 }

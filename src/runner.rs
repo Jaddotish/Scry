@@ -36,6 +36,21 @@ fn read_with_limit<R: Read>(
     (captured, truncated)
 }
 
+fn remove_strace_pid_prefix(line: &str) -> &str {
+    let trimmed = line.trim_start();
+
+    let digit_count = trimmed
+        .chars()
+        .take_while(|character| character.is_ascii_digit())
+        .count();
+
+    if digit_count > 0 {
+        trimmed[digit_count..].trim_start()
+    } else {
+        trimmed
+    }
+}
+
 fn is_successful_write_open(line: &str) -> bool {
     line.starts_with("openat(")
         && (line.contains("O_WRONLY") || line.contains("O_RDWR"))
@@ -99,6 +114,7 @@ pub fn run_command(
     file_size_limit_bytes: u64,
     open_file_limit: u64,
     process_limit: u64,
+    use_uts_namespace: bool,
 ) -> RunResult {
     let start = Instant::now();
 
@@ -110,11 +126,27 @@ pub fn run_command(
 
     cmd.arg("-o")
         .arg(&trace_path)
+        .arg("-f")
         .arg("-e")
-        .arg("trace=openat,unlink,rename,mkdir,rmdir")
-        .arg(command)
-        .args(args)
-        .stdout(Stdio::piped())
+        .arg("trace=openat,unlink,rename,mkdir,rmdir");
+
+    if use_uts_namespace {
+        cmd.arg("unshare")
+            .arg("--user")
+            .arg("--map-root-user")
+            .arg("--uts")
+            .arg("--fork")
+            .arg("bash")
+            .arg("-c")
+            .arg("hostname scry-sandbox && exec \"$@\"")
+            .arg("scry-shell")
+            .arg(command)
+            .args(args);
+    } else {
+        cmd.arg(command).args(args);
+    }
+
+    cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
 
@@ -236,7 +268,9 @@ pub fn run_command(
                     String::from_utf8_lossy(&stderr_bytes).to_string();
 
                 let command_failed_to_start =
-                    stderr_text.starts_with("strace: Cannot find executable");
+                    stderr_text.starts_with("strace: Cannot find executable")
+                        || (stderr_text.contains(": exec:")
+                            && stderr_text.contains("not found"));
 
                 let trace_contents = std::fs::read_to_string(&trace_path)
                     .expect("Could not read trace file");
@@ -248,6 +282,8 @@ pub fn run_command(
                 let mut files_renamed = Vec::new();
 
                 for line in trace_contents.lines() {
+                    let line = remove_strace_pid_prefix(line);
+
                     if is_successful_write_open(line) {
                         if let Some(path) = extract_quoted_path(line) {
                             files_opened_for_writing.push(path.to_string());
