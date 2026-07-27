@@ -110,8 +110,17 @@ fn print_usage() {
     eprintln!("Usage: scry [--timeout SECONDS] <command> [arguments...]");
 }
 
+fn print_json_result(result: &RunResult) {
+    let json = serde_json::to_string_pretty(result)
+        .expect("Could not serialize result");
+
+    println!("{json}");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+
+    let json_output = args.get(1).map(|arg| arg == "--json").unwrap_or(false);
 
     if args.len() < 2 {
         eprintln!("Error: missing command.");
@@ -120,36 +129,40 @@ fn main() {
     }
 
     let mut timeout_secs = 3;
-    let command_index;
+    let mut command_index = 1;
 
-    if args[1] == "--timeout" {
-        if args.len() < 3 {
+    if args[command_index] == "--json" {
+        command_index += 1;
+    }
+
+    if args.get(command_index).map(|arg| arg == "--timeout").unwrap_or(false) {
+        let timeout_value_index = command_index + 1;
+
+        if args.len() <= timeout_value_index {
             eprintln!("Error: --timeout requires a number.");
             print_usage();
             return;
         }
 
-        timeout_secs = match args[2].parse::<u64>() {
+        timeout_secs = match args[timeout_value_index].parse::<u64>() {
             Ok(value) => value,
             Err(_) => {
                 eprintln!(
                     "Error: timeout must be a nonnegative integer, not {:?}.",
-                    args[2]
+                    args[timeout_value_index]
                 );
                 print_usage();
                 return;
             }
         };
 
-        if args.len() < 4 {
-            eprintln!("Error: missing command after timeout value.");
-            print_usage();
-            return;
-        }
+        command_index += 2;
+    }
 
-        command_index = 3;
-    } else {
-        command_index = 1;
+    if args.len() <= command_index {
+        eprintln!("Error: missing command.");
+        print_usage();
+        return;
     }
 
     let command = &args[command_index];
@@ -181,7 +194,11 @@ fn main() {
         config.process_limit
     );
 
-    print_result(&result);
+    if json_output {
+        print_json_result(&result);
+    } else {
+        print_result(&result);
+    }
 }
 
 #[cfg(test)]
@@ -548,5 +565,28 @@ mod tests {
                 "new_trace_name.txt".to_string(),
             ))
         );
+    }
+
+    #[test]
+    fn run_result_serializes_to_json() {
+        let result = run_command(
+            "python3",
+            &["-c", "print('hello')"],
+            2,
+            5,
+            1_000_000,
+            1_000_000_000,
+            10_000_000,
+            64,
+            10_000,
+        );
+
+        let json = serde_json::to_value(&result)
+            .expect("RunResult should serialize to JSON");
+
+        assert_eq!(json["command"], "python3");
+        assert_eq!(json["status"], "Succeeded");
+        assert_eq!(json["exit_code"], 0);
+        assert_eq!(json["stdout"], "hello\n");
     }
 }

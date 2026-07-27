@@ -1,4 +1,6 @@
-#[derive(Debug)]
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
 pub enum RunStatus {
     Succeeded,
     Failed,
@@ -7,7 +9,7 @@ pub enum RunStatus {
     Signaled,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct RunResult {
     pub command: String,
     pub args: Vec<String>,
