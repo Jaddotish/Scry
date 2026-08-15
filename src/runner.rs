@@ -115,6 +115,7 @@ pub fn run_command(
     open_file_limit: u64,
     process_limit: u64,
     use_uts_namespace: bool,
+    use_network_namespace: bool,
 ) -> RunResult {
     let start = Instant::now();
 
@@ -130,18 +131,33 @@ pub fn run_command(
         .arg("-e")
         .arg("trace=openat,unlink,rename,mkdir,rmdir");
 
-    if use_uts_namespace {
+    if use_uts_namespace || use_network_namespace {
         cmd.arg("unshare")
             .arg("--user")
-            .arg("--map-root-user")
-            .arg("--uts")
-            .arg("--fork")
-            .arg("bash")
-            .arg("-c")
-            .arg("hostname scry-sandbox && exec \"$@\"")
-            .arg("scry-shell")
-            .arg(command)
-            .args(args);
+            .arg("--map-root-user");
+
+        if use_uts_namespace {
+            cmd.arg("--uts");
+        }
+
+        if use_network_namespace {
+            cmd.arg("--net");
+        }
+
+        if use_uts_namespace {
+            cmd.arg("--fork")
+                .arg("bash")
+                .arg("-c")
+                .arg("hostname scry-sandbox && exec \"$@\"")
+                .arg("scry-shell")
+                .arg(command)
+                .args(args);
+        } else {
+            cmd.arg("--fork")
+                .arg(command)
+                .args(args);
+        }
+        
     } else {
         cmd.arg(command).args(args);
     }

@@ -7,4 +7,5 @@ pub struct RunConfig {
     pub open_file_limit: u64,
     pub process_limit: u64,
     pub use_uts_namespace: bool,
+    pub use_network_namespace: bool,
 }

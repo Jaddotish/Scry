@@ -181,6 +181,7 @@ fn main() {
         open_file_limit: 64,
         process_limit: 10_000,
         use_uts_namespace: true,
+        use_network_namespace: true,
     };
 
     let result = run_command(
@@ -194,6 +195,7 @@ fn main() {
         config.open_file_limit,
         config.process_limit,
         config.use_uts_namespace,
+        config.use_network_namespace,
     );
 
     if json_output {
@@ -220,6 +222,7 @@ mod tests {
             64, 
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -241,6 +244,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -262,6 +266,7 @@ mod tests {
             64, 
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -284,6 +289,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -306,6 +312,7 @@ mod tests {
             64, 
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -327,6 +334,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -351,6 +359,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -373,6 +382,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -392,6 +402,7 @@ mod tests {
             64, 
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
@@ -414,6 +425,7 @@ mod tests {
             64, 
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -438,6 +450,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -460,6 +473,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -488,6 +502,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -514,6 +529,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -540,6 +556,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -573,6 +590,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -598,6 +616,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         let json = serde_json::to_value(&result)
@@ -622,6 +641,7 @@ mod tests {
             64,
             10_000,
             true,
+            true, 
         );
 
         assert!(matches!(with_namespace.status, RunStatus::Succeeded));
@@ -638,9 +658,47 @@ mod tests {
             64,
             10_000,
             false,
+            true, 
         );
 
         assert!(matches!(without_namespace.status, RunStatus::Succeeded));
         assert_ne!(without_namespace.stdout.trim(), "scry-sandbox");
+    }
+
+    #[test]
+    fn network_namespace_removes_normal_network_route() {
+        let with_namespace = run_command(
+            "ip",
+            &["route"],
+            2,
+            5,
+            1_000_000,
+            1_000_000_000,
+            10_000_000,
+            64,
+            10_000,
+            false, 
+            true, 
+        );
+
+        assert!(matches!(with_namespace.status, RunStatus::Succeeded));
+        assert!(!with_namespace.stdout.contains("default"));
+
+        let without_namespace = run_command(
+            "ip",
+            &["route"],
+            2,
+            5,
+            1_000_000,
+            1_000_000_000,
+            10_000_000,
+            64,
+            10_000,
+            false,
+            false, 
+        );
+
+        assert!(matches!(without_namespace.status, RunStatus::Succeeded));
+        assert!(without_namespace.stdout.contains("default"));
     }
 }
