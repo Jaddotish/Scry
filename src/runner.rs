@@ -116,7 +116,17 @@ pub fn run_command(
     process_limit: u64,
     use_uts_namespace: bool,
     use_network_namespace: bool,
+    use_mount_namespace: bool,
 ) -> RunResult {
+    let current_dir = std::env::current_dir()
+        .expect("Could not get current working directory");
+
+    let current_dir_str = current_dir
+        .to_str()
+        .expect("Current directory is not valid UTF-8");
+
+
+
     let start = Instant::now();
 
     let trace_file = tempfile::NamedTempFile::new()
@@ -131,7 +141,7 @@ pub fn run_command(
         .arg("-e")
         .arg("trace=openat,unlink,rename,mkdir,rmdir");
 
-    if use_uts_namespace || use_network_namespace {
+    if use_uts_namespace || use_network_namespace || use_mount_namespace {
         cmd.arg("unshare")
             .arg("--user")
             .arg("--map-root-user");
@@ -144,7 +154,20 @@ pub fn run_command(
             cmd.arg("--net");
         }
 
-        if use_uts_namespace {
+        if use_mount_namespace {
+            cmd.arg("--mount");
+        }
+
+
+
+        if use_mount_namespace {
+            cmd.arg("--fork")
+                .arg("target/debug/scry-helper")
+                .arg(current_dir_str)
+                .arg(use_uts_namespace.to_string())
+                .arg(command)
+                .args(args);
+        } else if use_uts_namespace {
             cmd.arg("--fork")
                 .arg("bash")
                 .arg("-c")
@@ -157,6 +180,8 @@ pub fn run_command(
                 .arg(command)
                 .args(args);
         }
+
+
         
     } else {
         cmd.arg(command).args(args);
@@ -286,7 +311,8 @@ pub fn run_command(
                 let command_failed_to_start =
                     stderr_text.starts_with("strace: Cannot find executable")
                         || (stderr_text.contains(": exec:")
-                            && stderr_text.contains("not found"));
+                            && stderr_text.contains("not found"))
+                        || stderr_text.starts_with("scry-helper: failed to exec target:");
 
                 let trace_contents = std::fs::read_to_string(&trace_path)
                     .expect("Could not read trace file");

@@ -182,6 +182,7 @@ fn main() {
         process_limit: 10_000,
         use_uts_namespace: true,
         use_network_namespace: true,
+        use_mount_namespace: true,
     };
 
     let result = run_command(
@@ -196,6 +197,7 @@ fn main() {
         config.process_limit,
         config.use_uts_namespace,
         config.use_network_namespace,
+        config.use_mount_namespace,
     );
 
     if json_output {
@@ -223,7 +225,10 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
+
+        print_result(&result);
 
         assert!(matches!(result.status, RunStatus::Succeeded));
         assert_eq!(result.exit_code, Some(0));
@@ -245,6 +250,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -267,6 +273,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::TimedOut));
@@ -290,6 +297,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -313,6 +321,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::FailedToStart));
@@ -335,6 +344,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -360,6 +370,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -383,6 +394,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -403,6 +415,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Signaled));
@@ -426,6 +439,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -451,6 +465,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Failed));
@@ -474,6 +489,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -503,6 +519,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -530,6 +547,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -557,6 +575,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -591,6 +610,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         assert!(matches!(result.status, RunStatus::Succeeded));
@@ -617,6 +637,7 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
 
         let json = serde_json::to_value(&result)
@@ -642,8 +663,9 @@ mod tests {
             10_000,
             true,
             true, 
+            true,
         );
-
+        
         assert!(matches!(with_namespace.status, RunStatus::Succeeded));
         assert_eq!(with_namespace.stdout.trim(), "scry-sandbox");
 
@@ -659,6 +681,7 @@ mod tests {
             10_000,
             false,
             true, 
+            true,
         );
 
         assert!(matches!(without_namespace.status, RunStatus::Succeeded));
@@ -679,6 +702,7 @@ mod tests {
             10_000,
             false, 
             true, 
+            true,
         );
 
         assert!(matches!(with_namespace.status, RunStatus::Succeeded));
@@ -696,6 +720,7 @@ mod tests {
             10_000,
             false,
             false, 
+            true,
         );
 
         assert!(matches!(without_namespace.status, RunStatus::Succeeded));

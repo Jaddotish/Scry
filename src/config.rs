@@ -8,4 +8,5 @@ pub struct RunConfig {
     pub process_limit: u64,
     pub use_uts_namespace: bool,
     pub use_network_namespace: bool,
+    pub use_mount_namespace: bool,
 }
